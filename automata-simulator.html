@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Automata Studio</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#21262d;
+  --border:#30363d;--accent:#58a6ff;--green:#3fb950;
+  --red:#f85149;--orange:#e3b341;--purple:#8957e5;
+  --text:#c9d1d9;--dim:#8b949e;--r:6px;
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Header ── */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;gap:16px;height:52px;flex-shrink:0}
+header h1{font-size:17px;font-weight:700;color:var(--accent);letter-spacing:.4px;white-space:nowrap}
+nav{display:flex;gap:4px}
+nav button{padding:5px 14px;border:1px solid var(--border);background:transparent;color:var(--dim);border-radius:var(--r);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s}
+nav button:hover:not(.locked){border-color:var(--accent);color:var(--text)}
+nav button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+nav button.locked{opacity:.38;cursor:default;position:relative}
+nav button.locked::after{content:'soon';font-size:8px;position:absolute;top:-5px;right:-2px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 3px;color:var(--dim)}
+
+/* ── Layout ── */
+main{display:flex;flex:1;overflow:hidden}
+#sidebar{width:272px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0}
+#dfa-view{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#coming-soon{display:none;flex:1;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+#coming-soon h2{font-size:26px;color:var(--dim)}
+#coming-soon p{color:var(--dim);font-size:13px}
+
+/* ── Sidebar panels ── */
+.panel{padding:14px;border-bottom:1px solid var(--border)}
+.panel h3{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-bottom:10px}
+.row{display:flex;gap:6px}
+.btn{width:100%;padding:7px 11px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:var(--r);cursor:pointer;font-size:13px;text-align:left;display:flex;align-items:center;gap:7px;transition:all .15s;margin-bottom:5px}
+.btn:last-child{margin-bottom:0}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.active{border-color:var(--accent);color:var(--accent);background:rgba(88,166,255,.1)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;justify-content:center}
+.btn.primary:hover{background:#79b8ff;border-color:#79b8ff;color:#fff}
+.btn.danger:hover{border-color:var(--red);color:var(--red)}
+.label{font-size:12px;color:var(--dim);margin-bottom:4px}
+.igroup{display:flex;flex-direction:column;gap:5px;margin-bottom:9px}
+input[type=text],select{width:100%;padding:6px 9px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--r);font-size:13px}
+input:focus,select:focus{outline:none;border-color:var(--accent)}
+select option{background:var(--surface2)}
+.hint{font-size:11px;color:var(--dim);padding:6px 8px;background:rgba(88,166,255,.04);border:1px solid rgba(88,166,255,.12);border-radius:4px;line-height:1.5}
+
+/* ── State list ── */
+.state-list{max-height:150px;overflow-y:auto;margin-bottom:8px}
+.sitem{display:flex;align-items:center;gap:7px;padding:4px 5px;border-radius:4px;cursor:pointer;font-size:12px;transition:background .1s}
+.sitem:hover{background:var(--surface2)}
+.sitem.sel{background:rgba(248,81,73,.1)}
+.sdot{width:14px;height:14px;border-radius:50%;border:1.5px solid;flex-shrink:0}
+.sdot.normal{border-color:var(--border)}
+.sdot.start{border-color:var(--accent);background:rgba(88,166,255,.2)}
+.sdot.accept{border-color:var(--green);background:rgba(63,185,80,.2)}
+.sdot.both{border-color:var(--green);background:rgba(63,185,80,.2);box-shadow:0 0 0 2px rgba(88,166,255,.4)}
+.stags{margin-left:auto;font-size:10px;color:var(--dim)}
+
+/* ── Transition list ── */
+.titem{display:flex;align-items:center;gap:4px;padding:3px 0;font-size:12px}
+.titem .lbl{font-family:monospace;color:var(--accent)}
+.titem .sym{color:var(--dim)}
+.titem .del{margin-left:auto;background:none;border:none;color:var(--dim);cursor:pointer;font-size:12px;padding:0 2px;transition:color .1s}
+.titem .del:hover{color:var(--red)}
+
+/* ── Sim ── */
+.sim-row{display:flex;align-items:center;gap:6px;margin-top:8px}
+.sim-row button{width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;font-size:13px;flex-shrink:0;transition:all .15s}
+.sim-row button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.sim-row button:disabled{opacity:.3;cursor:default}
+#step-ind{font-size:12px;color:var(--dim);flex:1;text-align:center}
+.result-box{margin-top:8px;padding:9px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);font-size:12px;min-height:48px}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+.badge.idle{background:var(--surface2);color:var(--dim);border:1px solid var(--border)}
+.badge.ok{background:rgba(63,185,80,.18);color:var(--green);border:1px solid rgba(63,185,80,.4)}
+.badge.fail{background:rgba(248,81,73,.18);color:var(--red);border:1px solid rgba(248,81,73,.4)}
+.path-row{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px}
+.pnode{background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:2px 7px;font-size:11px;font-family:monospace;cursor:pointer;transition:all .15s}
+.pnode:hover{border-color:var(--accent)}
+.pnode.cur{border-color:var(--orange);color:var(--orange)}
+.pnode.fin{border-color:var(--green);color:var(--green)}
+.err-msg{color:var(--red);font-size:11px;margin-top:4px}
+
+/* ── Canvas ── */
+.canvas-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:7px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;font-size:12px;color:var(--dim)}
+#canvas-wrap{flex:1;position:relative;overflow:hidden}
+canvas{display:block}
+canvas.sel-cur{cursor:default}
+canvas.grab-cur{cursor:grabbing}
+
+/* ── Context menu ── */
+#ctx-menu{display:none;position:fixed;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:4px;min-width:165px;z-index:300;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.cm-head{padding:4px 10px;font-size:11px;color:var(--dim);border-bottom:1px solid var(--border);margin-bottom:3px}
+.cm-item{padding:7px 12px;cursor:pointer;font-size:13px;border-radius:4px;transition:background .1s}
+.cm-item:hover{background:var(--surface)}
+.cm-item.d{color:var(--red)}
+.cm-sep{border:none;border-top:1px solid var(--border);margin:3px 0}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚡ Automata Studio</h1>
+  <nav id="nav">
+    <button data-type="DFA" class="active">DFA</button>
+    <button data-type="NFA" class="locked">NFA</button>
+    <button data-type="GNFA" class="locked">GNFA</button>
+    <button data-type="PDA" class="locked">PDA</button>
+    <button data-type="TM" class="locked">Turing</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ── Sidebar ── -->
+  <aside id="sidebar">
+
+    <!-- Tool -->
+    <div class="panel">
+      <h3>Canvas Tool</h3>
+      <div class="row">
+        <button class="btn active" id="tool-add" onclick="setTool('add')">✚ Add</button>
+        <button class="btn" id="tool-sel" onclick="setTool('select')">↖ Select</button>
+      </div>
+      <div class="hint" id="tool-hint">Click canvas to add states · Drag to move</div>
+    </div>
+
+    <!-- States -->
+    <div class="panel">
+      <h3>States <span id="sc" style="color:var(--accent)">0</span></h3>
+      <div class="state-list" id="state-list"></div>
+      <button class="btn danger" id="del-btn" style="display:none" onclick="deleteSelected()">🗑 Delete Selected</button>
+    </div>
+
+    <!-- Transitions -->
+    <div class="panel">
+      <h3>Add Transition</h3>
+      <div class="igroup">
+        <div class="label">From</div>
+        <select id="t-from"></select>
+      </div>
+      <div class="igroup">
+        <div class="label">Symbol</div>
+        <input type="text" id="t-sym" placeholder="e.g. a, 0, ε" maxlength="8">
+      </div>
+      <div class="igroup">
+        <div class="label">To</div>
+        <select id="t-to"></select>
+      </div>
+      <button class="btn primary" onclick="addTransition()">Add Transition</button>
+      <div id="t-list" style="margin-top:9px;max-height:110px;overflow-y:auto"></div>
+    </div>
+
+    <!-- Simulate -->
+    <div class="panel">
+      <h3>Simulate</h3>
+      <div class="igroup">
+        <div class="label">Input String</div>
+        <input type="text" id="sim-str" placeholder="e.g. aabb" oninput="onSimInput()">
+      </div>
+      <div class="row">
+        <button class="btn primary" onclick="runSim()" style="flex:1">▶ Run</button>
+        <button class="btn" onclick="resetSim()" style="flex:0 0 auto;width:auto;padding:7px 12px">↺</button>
+      </div>
+      <div class="sim-row" id="step-ctrl" style="display:none">
+        <button id="btn-bk" onclick="stepBack()" disabled>◀</button>
+        <span id="step-ind">0 / 0</span>
+        <button id="btn-fwd" onclick="stepFwd()">▶</button>
+      </div>
+      <div class="result-box">
+        <div style="display:flex;align-items:center;gap:8px">
+          Result: <span class="badge idle" id="result-badge">—</span>
+        </div>
+        <div class="path-row" id="path-row"></div>
+        <div id="err-msg"></div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="panel">
+      <h3>Actions</h3>
+      <button class="btn" onclick="clearAll()">🗑 Clear All</button>
+      <button class="btn" onclick="loadExample()">📖 Load Example</button>
+    </div>
+
+  </aside>
+
+  <!-- ── Canvas ── -->
+  <div id="dfa-view" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+    <div class="canvas-bar">
+      <span>Right-click state for options</span>
+      <span style="margin-left:auto;font-family:monospace" id="alpha-disp">Σ = ∅</span>
+      <span id="status-txt" style="color:var(--green)">Ready</span>
+    </div>
+    <div id="canvas-wrap">
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Coming Soon ── -->
+  <div id="coming-soon" style="display:none">
+    <div style="font-size:60px">🚧</div>
+    <h2 id="cs-title">Coming Soon</h2>
+    <p id="cs-desc"></p>
+  </div>
+</main>
+
+<!-- Context Menu -->
+<div id="ctx-menu"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// BASE AUTOMATA (subclass for NFA, GNFA, PDA, TM, etc.)
+// ════════════════════════════════════════════════════════════
+class AutomataBase {
+  constructor(typeName) {
+    this.typeName = typeName;
+    this.states = new Map();   // id → {id,x,y,label,isStart,isAccept}
+    this._counter = 0;
+    this.startState = null;
+  }
+
+  _nextId() { return `q${this._counter++}`; }
+
+  addState(x, y, label) {
+    const id = this._nextId();
+    const s = { id, x, y, label: label ?? id, isStart: false, isAccept: false };
+    this.states.set(id, s);
+    return s;
+  }
+
+  removeState(id) {
+    this.states.delete(id);
+    if (this.startState === id) this.startState = null;
+  }
+
+  setStart(id) {
+    if (this.startState) {
+      const prev = this.states.get(this.startState);
+      if (prev) prev.isStart = false;
+    }
+    this.startState = id;
+    const s = this.states.get(id);
+    if (s) s.isStart = true;
+  }
+
+  toggleAccept(id) {
+    const s = this.states.get(id);
+    if (s) s.isAccept = !s.isAccept;
+  }
+
+  renameState(id, label) {
+    const s = this.states.get(id);
+    if (s) s.label = label;
+  }
+
+  // Override in subclasses:
+  getTransitions()       { return []; }           // [{from,symbol,to}]
+  simulate(input)        { return {accepted:false,path:[]}; }
+  addTransition()        {}
+  removeTransition()     {}
+  reset() {
+    this.states.clear();
+    this.startState = null;
+    this._counter = 0;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// DFA
+// ════════════════════════════════════════════════════════════
+class DFA extends AutomataBase {
+  constructor() {
+    super('DFA');
+    this.delta = new Map();   // "from,symbol" → toId
+    this.alphabet = new Set();
+  }
+
+  addTransition(from, symbol, to) {
+    this.delta.set(`${from},${symbol}`, to);
+    this.alphabet.add(symbol);
+  }
+
+  removeTransition(from, symbol) {
+    this.delta.delete(`${from},${symbol}`);
+    this._rebuildAlphabet();
+  }
+
+  _rebuildAlphabet() {
+    this.alphabet.clear();
+    for (const k of this.delta.keys()) {
+      this.alphabet.add(k.slice(k.indexOf(',') + 1));
+    }
+  }
+
+  removeState(id) {
+    super.removeState(id);
+    for (const [k, to] of [...this.delta]) {
+      if (k.split(',')[0] === id || to === id) this.delta.delete(k);
+    }
+    this._rebuildAlphabet();
+  }
+
+  getTransitions() {
+    return [...this.delta].map(([k, to]) => {
+      const ci = k.indexOf(',');
+      return { from: k.slice(0, ci), symbol: k.slice(ci + 1), to };
+    });
+  }
+
+  simulate(input) {
+    if (!this.startState)
+      return { accepted: false, error: 'No start state defined', path: [] };
+
+    let cur = this.startState;
+    const path = [{ state: cur, pos: 0 }];
+
+    for (let i = 0; i < input.length; i++) {
+      const ch = input[i];
+      const next = this.delta.get(`${cur},${ch}`);
+      if (next === undefined)
+        return { accepted: false, error: `Dead: no δ(${this.states.get(cur)?.label ?? cur}, '${ch}')`, path, deadAt: i };
+      cur = next;
+      path.push({ state: cur, pos: i + 1 });
+    }
+
+    const fs = this.states.get(cur);
+    return { accepted: !!fs?.isAccept, path, finalState: cur };
+  }
+
+  reset() {
+    super.reset();
+    this.delta.clear();
+    this.alphabet.clear();
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// NFA STUB — fill in later
+// ════════════════════════════════════════════════════════════
+class NFA extends AutomataBase {
+  constructor() { super('NFA'); }
+  // TODO: Set<toId> values, epsilon closures, powerset construction
+}
+
+// ════════════════════════════════════════════════════════════
+// GNFA STUB — fill in later
+// ════════════════════════════════════════════════════════════
+class GNFA extends AutomataBase {
+  constructor() { super('GNFA'); }
+  // TODO: regex-labelled transitions, state elimination
+}
+
+// ════════════════════════════════════════════════════════════
+// PDA STUB — fill in later
+// ════════════════════════════════════════════════════════════
+class PDA extends AutomataBase {
+  constructor() { super('PDA'); }
+  // TODO: (input,pop) → (to,push) transitions, stack display
+}
+
+// ════════════════════════════════════════════════════════════
+// TURING MACHINE STUB — fill in later
+// ════════════════════════════════════════════════════════════
+class TuringMachine extends AutomataBase {
+  constructor() { super('TM'); }
+  // TODO: tape, head position, (state,read) → (state,write,dir)
+}
+
+// ════════════════════════════════════════════════════════════
+// GRAPH RENDERER  (Canvas 2D — reusable for all automata types)
+// ════════════════════════════════════════════════════════════
+class GraphRenderer {
+  constructor(canvas) {
+    this.cv = canvas;
+    this.cx = canvas.getContext('2d');
+    this.R = 27;
+    this._hlStates = new Set();
+    this._hlEdges  = [];      // [{from,to}]
+    this.C = {
+      bg:'#0d1117', fill:'#1c2128', border:'#388bfd',
+      accept:'#3fb950', hl:'#e3b341', sel:'#f85149', hov:'#8957e5',
+      txt:'#c9d1d9', edge:'#6e7681', edgeHL:'#e3b341',
+      lbl:'#79b8ff', startArr:'#58a6ff', grid:'rgba(255,255,255,.022)'
+    };
+  }
+
+  setHighlight(states = new Set(), edges = []) {
+    this._hlStates = states;
+    this._hlEdges  = edges;
+  }
+
+  render(automata, selected, hovered) {
+    const { cv, cx, R } = this;
+    const W = cv.width, H = cv.height;
+
+    cx.fillStyle = this.C.bg;
+    cx.fillRect(0, 0, W, H);
+    this._grid(W, H);
+
+    // Group transitions by (from,to) to merge multi-symbol labels
+    const edgeMap = new Map();
+    for (const t of automata.getTransitions()) {
+      const k = `${t.from}→${t.to}`;
+      if (!edgeMap.has(k)) edgeMap.set(k, { from: t.from, to: t.to, syms: [] });
+      edgeMap.get(k).syms.push(t.symbol);
+    }
+
+    for (const e of edgeMap.values()) {
+      const fS = automata.states.get(e.from);
+      const tS = automata.states.get(e.to);
+      if (!fS || !tS) continue;
+      const label = e.syms.join(', ');
+      const hl = this._hlEdges.some(h => h.from === e.from && h.to === e.to);
+      const bidir = edgeMap.has(`${e.to}→${e.from}`);
+      this._edge(fS, tS, label, hl, bidir);
+    }
+
+    for (const [id, s] of automata.states) {
+      this._state(s,
+        this._hlStates.has(id),
+        selected === id,
+        hovered === id
+      );
+    }
+  }
+
+  _grid(W, H) {
+    const cx = this.cx;
+    cx.fillStyle = this.C.grid;
+    for (let x = 30; x < W; x += 40)
+      for (let y = 30; y < H; y += 40) {
+        cx.beginPath(); cx.arc(x, y, 1.2, 0, Math.PI*2); cx.fill();
+      }
+  }
+
+  _state(s, hl, sel, hov) {
+    const cx = this.cx, R = this.R;
+    let fill = this.C.fill;
+    let bord = s.isAccept ? this.C.accept : this.C.border;
+
+    if (hl)  { fill='rgba(227,179,65,.15)';  bord = this.C.hl;  }
+    else if (sel) { fill='rgba(248,81,73,.15)'; bord = this.C.sel; }
+    else if (hov) { fill='rgba(137,87,229,.15)';bord = this.C.hov; }
+
+    cx.shadowColor = bord;
+    cx.shadowBlur  = hl || sel ? 16 : 5;
+
+    cx.beginPath(); cx.arc(s.x, s.y, R, 0, Math.PI*2);
+    cx.fillStyle = fill; cx.fill();
+    cx.strokeStyle = bord; cx.lineWidth = sel ? 2.5 : 2; cx.stroke();
+    cx.shadowBlur = 0;
+
+    if (s.isAccept) {
+      cx.beginPath(); cx.arc(s.x, s.y, R - 5, 0, Math.PI*2);
+      cx.strokeStyle = this.C.accept; cx.lineWidth = 1.5; cx.stroke();
+    }
+
+    if (s.isStart) {
+      const ax = s.x - R - 28;
+      cx.beginPath(); cx.moveTo(ax, s.y); cx.lineTo(s.x - R - 2, s.y);
+      cx.strokeStyle = this.C.startArr; cx.lineWidth = 2; cx.stroke();
+      cx.beginPath();
+      cx.moveTo(s.x - R - 2, s.y);
+      cx.lineTo(s.x - R - 10, s.y - 5);
+      cx.lineTo(s.x - R - 10, s.y + 5);
+      cx.closePath(); cx.fillStyle = this.C.startArr; cx.fill();
+    }
+
+    cx.fillStyle = hl ? this.C.hl : this.C.txt;
+    cx.font = 'bold 13px monospace';
+    cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.fillText(s.label, s.x, s.y);
+  }
+
+  _edge(f, t, label, hl, bidir) {
+    if (f.id === t.id) { this._selfLoop(f, label, hl); return; }
+    if (bidir) this._curved(f, t, label, hl);
+    else       this._straight(f, t, label, hl);
+  }
+
+  _straight(f, t, label, hl) {
+    const cx = this.cx, R = this.R;
+    const dx = t.x - f.x, dy = t.y - f.y;
+    const d = Math.hypot(dx, dy), nx = dx/d, ny = dy/d;
+    const sx = f.x + nx*R, sy = f.y + ny*R;
+    const ex = t.x - nx*R, ey = t.y - ny*R;
+
+    cx.beginPath(); cx.moveTo(sx, sy); cx.lineTo(ex, ey);
+    cx.strokeStyle = hl ? this.C.edgeHL : this.C.edge;
+    cx.lineWidth = hl ? 2 : 1.5; cx.stroke();
+    this._arrow(ex, ey, Math.atan2(dy, dx), hl);
+    this._label(label, (sx+ex)/2 - ny*16, (sy+ey)/2 + nx*16, hl);
+  }
+
+  _curved(f, t, label, hl) {
+    const cx = this.cx, R = this.R;
+    const dx = t.x - f.x, dy = t.y - f.y;
+    const d = Math.hypot(dx, dy);
+    const ny = -dx/d, nx = dy/d;  // perpendicular (swap+negate)
+    const off = 42;
+    const cpx = (f.x+t.x)/2 + nx*off;
+    const cpy = (f.y+t.y)/2 + ny*off;
+
+    const sa = Math.atan2(cpy - f.y, cpx - f.x);
+    const ea = Math.atan2(t.y  - cpy, t.x  - cpx);
+    const sx = f.x + Math.cos(sa)*R, sy = f.y + Math.sin(sa)*R;
+    const ex = t.x - Math.cos(ea)*R, ey = t.y - Math.sin(ea)*R;
+
+    cx.beginPath(); cx.moveTo(sx, sy);
+    cx.quadraticCurveTo(cpx, cpy, ex, ey);
+    cx.strokeStyle = hl ? this.C.edgeHL : this.C.edge;
+    cx.lineWidth = hl ? 2 : 1.5; cx.stroke();
+    this._arrow(ex, ey, ea, hl);
+    this._label(label, cpx, cpy, hl);
+  }
+
+  _selfLoop(s, label, hl) {
+    const cx = this.cx, R = this.R;
+    const ly = s.y - R - 20, lr = 18;
+
+    cx.beginPath();
+    // Arc from ~bottom-left to bottom-right of the loop circle
+    cx.arc(s.x, ly, lr, Math.PI * 0.2, Math.PI * 0.8 * 2.4);
+    cx.strokeStyle = hl ? this.C.edgeHL : this.C.edge;
+    cx.lineWidth = hl ? 2 : 1.5; cx.stroke();
+
+    // Arrowhead — at the right side of the loop, pointing down toward state
+    const aAngle = Math.PI * 0.82 * 2.4;
+    const ax = s.x + lr * Math.cos(aAngle);
+    const ay = ly  + lr * Math.sin(aAngle);
+    this._arrow(ax, ay, aAngle + Math.PI/2, hl);
+
+    this._label(label, s.x, ly - lr - 4, hl);
+  }
+
+  _arrow(x, y, angle, hl) {
+    const cx = this.cx, sz = 7;
+    cx.save(); cx.translate(x, y); cx.rotate(angle);
+    cx.beginPath();
+    cx.moveTo(0, 0); cx.lineTo(-sz, -sz*.45); cx.lineTo(-sz, sz*.45);
+    cx.closePath();
+    cx.fillStyle = hl ? this.C.edgeHL : this.C.edge; cx.fill();
+    cx.restore();
+  }
+
+  _label(text, x, y, hl) {
+    const cx = this.cx;
+    cx.font = '12px monospace';
+    const w = cx.measureText(text).width;
+    cx.fillStyle = 'rgba(13,17,23,.88)';
+    cx.fillRect(x - w/2 - 4, y - 9, w + 8, 18);
+    cx.fillStyle = hl ? this.C.edgeHL : this.C.lbl;
+    cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.fillText(text, x, y);
+  }
+
+  stateAt(px, py, states) {
+    for (const [, s] of states)
+      if (Math.hypot(px - s.x, py - s.y) <= this.R) return s;
+    return null;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// APP CONTROLLER
+// ════════════════════════════════════════════════════════════
+const App = (() => {
+
+  // ── state ──
+  let dfa = new DFA();
+  let renderer, canvas;
+  let tool = 'add';
+  let selId = null, hovId = null;
+  let drag = null, dragOff = { x:0, y:0 };
+
+  // sim
+  let simPath = null, simStep = 0, simActive = false;
+
+  // ── init ──
+  function init() {
+    canvas = document.getElementById('canvas');
+    renderer = new GraphRenderer(canvas);
+    resize();
+    window.addEventListener('resize', resize);
+
+    canvas.addEventListener('mousedown',   onDown);
+    canvas.addEventListener('mousemove',   onMove);
+    canvas.addEventListener('mouseup',     onUp);
+    canvas.addEventListener('mouseleave',  () => { hovId = null; drag = null; render(); });
+    canvas.addEventListener('contextmenu', onCtx);
+
+    document.addEventListener('click', () => {
+      document.getElementById('ctx-menu').style.display = 'none';
+    });
+
+    document.getElementById('nav').addEventListener('click', e => {
+      const btn = e.target.closest('button[data-type]');
+      if (!btn || btn.classList.contains('locked')) return;
+      switchType(btn.dataset.type);
+    });
+
+    render(); updateUI();
+  }
+
+  function resize() {
+    const w = document.getElementById('canvas-wrap');
+    canvas.width  = w.clientWidth;
+    canvas.height = w.clientHeight;
+    render();
+  }
+
+  function render() {
+    if (!renderer) return;
+    let hlS = new Set(), hlE = [];
+    if (simActive && simPath && simStep < simPath.length) {
+      hlS.add(simPath[simStep].state);
+      if (simStep > 0)
+        hlE = [{ from: simPath[simStep-1].state, to: simPath[simStep].state }];
+    }
+    renderer.setHighlight(hlS, hlE);
+    renderer.render(dfa, selId, hovId);
+  }
+
+  // ── mouse ──
+  function pos(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  function onDown(e) {
+    if (e.button !== 0) return;
+    const p = pos(e);
+    const s = renderer.stateAt(p.x, p.y, dfa.states);
+    if (s) {
+      drag = s.id;
+      dragOff = { x: p.x - s.x, y: p.y - s.y };
+      if (tool === 'select') { selId = s.id; updateUI(); }
+    } else if (tool === 'add') {
+      const ns = dfa.addState(p.x, p.y);
+      if (dfa.states.size === 1) dfa.setStart(ns.id);
+      updateUI();
+    } else {
+      selId = null; updateUI();
+    }
+    render();
+  }
+
+  function onMove(e) {
+    const p = pos(e);
+    hovId = renderer.stateAt(p.x, p.y, dfa.states)?.id ?? null;
+    if (drag) {
+      const s = dfa.states.get(drag);
+      if (s) { s.x = p.x - dragOff.x; s.y = p.y - dragOff.y; }
+      canvas.className = 'grab-cur';
+    } else {
+      canvas.className = tool === 'select' ? 'sel-cur' : '';
+    }
+    render();
+  }
+
+  function onUp() { drag = null; canvas.className = tool === 'select' ? 'sel-cur' : ''; }
+
+  function onCtx(e) {
+    e.preventDefault();
+    const p = pos(e);
+    const s = renderer.stateAt(p.x, p.y, dfa.states);
+    if (!s) return;
+    selId = s.id; updateUI(); render();
+    showCtxMenu(e.clientX, e.clientY, s);
+  }
+
+  // ── context menu ──
+  function showCtxMenu(x, y, s) {
+    const m = document.getElementById('ctx-menu');
+    m.innerHTML = `
+      <div class="cm-head">${s.label}</div>
+      ${ci('▶ Set as Start',   `App._setStart('${s.id}')`)}
+      ${ci(s.isAccept ? '★ Remove Accept' : '★ Set Accept', `App._toggleAccept('${s.id}')`)}
+      ${ci('✎ Rename…',        `App._rename('${s.id}')`)}
+      <hr class="cm-sep">
+      ${ci('🗑 Delete',         `App._del('${s.id}')`, true)}
+    `;
+    m.style.display = 'block';
+    m.style.left = x + 'px';
+    m.style.top  = y + 'px';
+  }
+  function ci(lbl, fn, danger=false) {
+    return `<div class="cm-item${danger?' d':''}"
+      onclick="${fn};document.getElementById('ctx-menu').style.display='none'">${lbl}</div>`;
+  }
+
+  // ── public actions (called from UI) ──
+  function setTool(t) {
+    tool = t;
+    document.getElementById('tool-add').classList.toggle('active', t === 'add');
+    document.getElementById('tool-sel').classList.toggle('active', t === 'select');
+    canvas.className = t === 'select' ? 'sel-cur' : '';
+    document.getElementById('tool-hint').textContent =
+      t === 'add' ? 'Click canvas to add states · Drag to move'
+                  : 'Click state to select · Right-click for options';
+  }
+
+  function _setStart(id)    { dfa.setStart(id);     updateUI(); render(); }
+  function _toggleAccept(id){ dfa.toggleAccept(id); updateUI(); render(); }
+  function _del(id)         {
+    dfa.removeState(id);
+    if (selId === id) selId = null;
+    updateUI(); render();
+  }
+  function _rename(id) {
+    const s = dfa.states.get(id);
+    if (!s) return;
+    const nl = prompt('New label:', s.label);
+    if (nl && nl.trim()) { dfa.renameState(id, nl.trim()); updateUI(); render(); }
+  }
+
+  function deleteSelected() { if (selId) _del(selId); }
+
+  function addTransition() {
+    const from = document.getElementById('t-from').value;
+    const sym  = document.getElementById('t-sym').value.trim();
+    const to   = document.getElementById('t-to').value;
+    if (!from || !sym || !to) { alert('Fill all transition fields.'); return; }
+    dfa.addTransition(from, sym, to);
+    document.getElementById('t-sym').value = '';
+    updateUI(); render();
+  }
+
+  function removeTransition(from, sym) {
+    dfa.removeTransition(from, sym);
+    updateUI(); render();
+  }
+
+  // ── simulation ──
+  function runSim() {
+    const input = document.getElementById('sim-str').value;
+    const res = dfa.simulate(input);
+    simPath   = res.path;
+    simStep   = 0;
+    simActive = true;
+    _renderSimResult(res, input);
+    document.getElementById('step-ctrl').style.display = 'flex';
+    _updateStep();
+    render();
+  }
+
+  function resetSim() {
+    simPath = null; simStep = 0; simActive = false;
+    document.getElementById('step-ctrl').style.display = 'none';
+    document.getElementById('result-badge').className = 'badge idle';
+    document.getElementById('result-badge').textContent = '—';
+    document.getElementById('path-row').innerHTML = '';
+    document.getElementById('err-msg').textContent = '';
+    render();
+  }
+
+  function onSimInput() { if (simActive) resetSim(); }
+
+  function stepBack() {
+    if (!simPath || simStep <= 0) return;
+    simStep--; _updateStep(); render();
+  }
+
+  function stepFwd() {
+    if (!simPath || simStep >= simPath.length - 1) return;
+    simStep++; _updateStep(); render();
+  }
+
+  function _updateStep() {
+    const len = simPath ? simPath.length - 1 : 0;
+    document.getElementById('step-ind').textContent = `${simStep} / ${len}`;
+    document.getElementById('btn-bk').disabled  = simStep <= 0;
+    document.getElementById('btn-fwd').disabled = !simPath || simStep >= simPath.length - 1;
+    // highlight path node
+    document.querySelectorAll('.pnode').forEach((n,i) => {
+      n.classList.toggle('cur', i === simStep);
+    });
+  }
+
+  function _renderSimResult(res, input) {
+    const badge = document.getElementById('result-badge');
+    badge.className = 'badge ' + (res.accepted ? 'ok' : 'fail');
+    badge.textContent = res.accepted ? 'ACCEPTED' : 'REJECTED';
+
+    const pr = document.getElementById('path-row');
+    let h = '';
+    (res.path ?? []).forEach((step, i) => {
+      const s = dfa.states.get(step.state);
+      const lbl = s?.label ?? step.state;
+      const fin = i === res.path.length - 1 && res.accepted;
+      if (i > 0) h += `<span style="color:var(--dim);font-size:10px;align-self:center">─${input[i-1]}→</span>`;
+      h += `<span class="pnode${fin?' fin':''}" data-i="${i}" title="${lbl}">${lbl}</span>`;
+    });
+    pr.innerHTML = h;
+    pr.querySelectorAll('.pnode').forEach(n =>
+      n.addEventListener('click', () => { simStep = +n.dataset.i; _updateStep(); render(); })
+    );
+
+    document.getElementById('err-msg').textContent = res.error ?? '';
+  }
+
+  // ── UI update ──
+  function updateUI() {
+    // state count
+    document.getElementById('sc').textContent = dfa.states.size;
+
+    // state list
+    let sh = '';
+    for (const [, s] of dfa.states) {
+      const dot = s.isStart && s.isAccept ? 'both' : s.isAccept ? 'accept' : s.isStart ? 'start' : 'normal';
+      const tags = (s.isStart?'▶ ':'') + (s.isAccept?'★':'');
+      sh += `<div class="sitem${selId===s.id?' sel':''}" onclick="App._select('${s.id}')">
+        <div class="sdot ${dot}"></div>
+        <span style="font-family:monospace;font-size:12px">${s.label}</span>
+        ${tags ? `<span class="stags">${tags.trim()}</span>` : ''}
+      </div>`;
+    }
+    document.getElementById('state-list').innerHTML =
+      sh || '<div style="font-size:12px;color:var(--dim);padding:3px">No states — click canvas to add</div>';
+
+    // selects
+    let opts = '<option value="">Select…</option>';
+    for (const [, s] of dfa.states) opts += `<option value="${s.id}">${s.label}</option>`;
+    document.getElementById('t-from').innerHTML = opts;
+    document.getElementById('t-to').innerHTML   = opts;
+
+    // transition list
+    let th = '';
+    for (const t of dfa.getTransitions()) {
+      const fl = dfa.states.get(t.from)?.label ?? t.from;
+      const tl = dfa.states.get(t.to)?.label   ?? t.to;
+      th += `<div class="titem">
+        <span class="lbl">${fl}</span>
+        <span class="sym">─${t.symbol}→</span>
+        <span class="lbl">${tl}</span>
+        <button class="del" onclick="App._rmTrans('${t.from}','${t.symbol}')" title="Remove">✕</button>
+      </div>`;
+    }
+    document.getElementById('t-list').innerHTML =
+      th || '<div style="font-size:11px;color:var(--dim)">No transitions</div>';
+
+    // alphabet
+    const al = [...dfa.alphabet].sort().join(', ');
+    document.getElementById('alpha-disp').textContent = `Σ = {${al || '∅'}}`;
+
+    // delete btn
+    document.getElementById('del-btn').style.display = selId ? 'flex' : 'none';
+  }
+
+  function _select(id) { selId = id; setTool('select'); updateUI(); render(); }
+  function _rmTrans(from, sym) { removeTransition(from, sym); }
+
+  // ── clear / example ──
+  function clearAll() {
+    if (!dfa.states.size) return;
+    if (!confirm('Clear all states and transitions?')) return;
+    dfa.reset(); selId = null; resetSim(); updateUI(); render();
+  }
+
+  function loadExample() {
+    dfa.reset(); selId = null; resetSim();
+    const W = canvas.width, H = canvas.height;
+    const cx = W/2, cy = H/2;
+
+    // DFA accepting {a,b}* strings ending with 'ab'
+    const q0 = dfa.addState(cx - 200, cy, 'q0');
+    const q1 = dfa.addState(cx,       cy, 'q1');
+    const q2 = dfa.addState(cx + 200, cy, 'q2');
+    dfa.setStart(q0.id);
+    dfa.toggleAccept(q2.id);
+    dfa.addTransition(q0.id, 'a', q1.id);
+    dfa.addTransition(q0.id, 'b', q0.id);
+    dfa.addTransition(q1.id, 'a', q1.id);
+    dfa.addTransition(q1.id, 'b', q2.id);
+    dfa.addTransition(q2.id, 'a', q1.id);
+    dfa.addTransition(q2.id, 'b', q0.id);
+
+    document.getElementById('status-txt').textContent = 'Example: ends in "ab"';
+    updateUI(); render();
+  }
+
+  // ── type switching ──
+  function switchType(type) {
+    document.querySelectorAll('#nav button').forEach(b => b.classList.remove('active'));
+    document.querySelector(`#nav button[data-type="${type}"]`).classList.add('active');
+
+    const isDFA = type === 'DFA';
+    document.getElementById('sidebar').style.display       = isDFA ? '' : 'none';
+    document.getElementById('dfa-view').style.display      = isDFA ? '' : 'none';
+    document.getElementById('coming-soon').style.display   = isDFA ? 'none' : 'flex';
+
+    if (!isDFA) {
+      const desc = {
+        NFA:  'Nondeterministic Finite Automata with ε-transitions — coming soon.',
+        GNFA: 'Generalised NFA for regex conversion — coming soon.',
+        PDA:  'Pushdown Automata with stack operations — coming soon.',
+        TM:   'Turing Machines with an infinite tape — coming soon.'
+      };
+      document.getElementById('cs-title').textContent = type;
+      document.getElementById('cs-desc').textContent  = desc[type] ?? '';
+    }
+  }
+
+  // ── expose ──
+  return {
+    init,
+    setTool,
+    _setStart, _toggleAccept, _del, _rename, _select, _rmTrans,
+    deleteSelected, addTransition, removeTransition,
+    runSim, resetSim, onSimInput, stepBack, stepFwd, clearAll, loadExample
+  };
+})();
+
+// ── global helpers wired to inline onclick attributes ──
+window.App       = App;
+window.setTool   = t  => App.setTool(t);
+window.addTransition  = () => App.addTransition();
+window.runSim         = () => App.runSim();
+window.resetSim       = () => App.resetSim();
+window.onSimInput     = () => App.onSimInput();
+window.stepBack       = () => App.stepBack();
+window.stepFwd        = () => App.stepFwd();
+window.clearAll       = () => App.clearAll();
+window.loadExample    = () => App.loadExample();
+window.deleteSelected = () => App.deleteSelected();
+
+document.addEventListener('DOMContentLoaded', () => App.init());
+</script>
+</body>
+</html>
